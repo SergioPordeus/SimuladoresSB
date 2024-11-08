@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamento do Simulador de Submarinos - Marinha do Brasil</title>
+    <style>
+        /* ... (estilos anteriores permanecem inalterados) ... */
+        .ship-card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .ship-image {
+            max-width: 100%;
+            height: auto;
+            margin-top: 10px;
+        }
+        .ship-image-select {
+            margin-top: 5px;
+            width: 100%;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <!-- ... (conteúdo do body permanece o mesmo) ... -->
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Catálogo de navios disponíveis
+            const catalogoNavios = {
+                COSTEIRO: [
+                    { id: 'NPNG', nome: 'Navio Patrulha', tipo: 'Patrulha' },
+                    { id: 'CORV', nome: 'Corveta', tipo: 'Escolta' },
+                    { id: 'FRAG', nome: 'Fragata', tipo: 'Escolta' },
+                    { id: 'MERC', nome: 'Navio Mercante', tipo: 'Mercante' }
+                ],
+                OCEANICO: [
+                    { id: 'DEST', nome: 'Contratorpedeiro', tipo: 'Escolta' },
+                    { id: 'FRAG', nome: 'Fragata', tipo: 'Escolta' },
+                    { id: 'TANQ', nome: 'Navio Tanque', tipo: 'Mercante' },
+                    { id: 'CONT', nome: 'Porta-Contêiner', tipo: 'Mercante' }
+                ],
+                PORTO: [
+                    { id: 'REBO', nome: 'Rebocador', tipo: 'Apoio' },
+                    { id: 'BALS', nome: 'Balsa', tipo: 'Transporte' },
+                    { id: 'MERCP', nome: 'Navio Mercante Pequeno', tipo: 'Mercante' }
+                ],
+                ESTREITO: [
+                    { id: 'CORV', nome: 'Corveta', tipo: 'Escolta' },
+                    { id: 'PATM', nome: 'Patrulha Médio', tipo: 'Patrulha' },
+                    { id: 'MERCP', nome: 'Navio Mercante Pequeno', tipo: 'Mercante' }
+                ]
+            };
+
+            // Define o mínimo como data atual
+            const dataInput = document.getElementById('data');
+            if (dataInput) {
+                dataInput.min = new Date().toISOString().split('T')[0];
+                dataInput.addEventListener('change', atualizarHorarios);
+            }
+
+            // Função para atualizar horários disponíveis
+            function atualizarHorarios() {
+                const horarioSelect = document.getElementById('horario');
+                const dataSelect = document.getElementById('data');
+                
+                horarioSelect.innerHTML = '<option value="">Selecione um horário</option>';
+                
+                if (dataSelect.value) {
+                    const horarios = ['08:00', '10:00', '13:00', '15:00'];
+                    horarios.forEach(horario => {
+                        const option = document.createElement('option');
+                        option.value = horario;
+                        option.textContent = horario;
+                        horarioSelect.appendChild(option);
+                    });
+                }
+            }
+
+            // Função para atualizar opções de cenário
+            function atualizarOpcoesCenario() {
+                const tipoTreinamento = document.getElementById('tipoTreinamento').value;
+                const tipoCenario = document.getElementById('tipoCenario');
+                
+                tipoCenario.innerHTML = '<option value="">Selecione o tipo de cenário</option>';
+                
+                let cenarios = [];
+                switch(tipoTreinamento) {
+                    case 'BASICO':
+                        cenarios = ['PORTO', 'COSTEIRO'];
+                        break;
+                    case 'AVANCADO':
+                        cenarios = ['COSTEIRO', 'OCEANICO', 'ESTREITO'];
+                        break;
+                }
+
+                cenarios.forEach(cenario => {
+                    const option = document.createElement('option');
+                    option.value = cenario;
+                    option.textContent = cenario.charAt(0) + cenario.slice(1).toLowerCase().replace('_', ' ');
+                    tipoCenario.appendChild(option);
+                });
+            }
+
+            // Função para atualizar navios disponíveis
+            function atualizarOpcoesNavios() {
+                const tipoCenario = document.getElementById('tipoCenario').value;
+                const naviosContainer = document.getElementById('naviosDisponiveis');
+                
+                naviosContainer.innerHTML = '';
+                
+                if (tipoCenario && catalogoNavios[tipoCenario]) {
+                    catalogoNavios[tipoCenario].forEach(navio => {
+                        const navioCard = document.createElement('div');
+                        navioCard.className = 'ship-card';
+                        navioCard.dataset.id = navio.id;
+                        
+                        navioCard.innerHTML = `
+                            <h4>${navio.nome}</h4>
+                            <p>Tipo: ${navio.tipo}</p>
+                            <select class="ship-image-select">
+                                <option value="placeholder-ship.png">Imagem Padrão</option>
+                                <option value="navio1.png">Navio 1</option>
+                                <option value="navio2.png">Navio 2</option>
+                                <option value="navio3.png">Navio 3</option>
+                            </select>
+                            <img src="placeholder-ship.png" alt="${navio.nome}" class="ship-image">
+                        `;
+                        
+                        const imageSelect = navioCard.querySelector('.ship-image-select');
+                        const shipImage = navioCard.querySelector('.ship-image');
+                        
+                        imageSelect.addEventListener('change', function() {
+                            shipImage.src = this.value;
+                        });
+                        
+                        navioCard.onclick = function(event) {
+                            if (!event.target.classList.contains('ship-image-select')) {
+                                this.classList.toggle('selected');
+                            }
+                        };
+                        
+                        naviosContainer.appendChild(navioCard);
+                    });
+                }
+            }
+
+            // Função para salvar o agendamento
+            window.salvarAgendamento = function() {
+                const formData = {
+                    tipoTreinamento: document.getElementById('tipoTreinamento').value,
+                    om: document.getElementById('om').value,
+                    data: document.getElementById('data').value,
+                    horario: document.getElementById('horario').value,
+                    participantes: document.getElementById('participantes').value,
+                    ramal: document.getElementById('ramal').value,
+                    responsavel: document.getElementById('responsavel').value,
+                    tipoCenario: document.getElementById('tipoCenario').value,
+                    dificuldade: document.getElementById('dificuldade').value,
+                    estadoMar: document.getElementById('estadoMar').value,
+                    visibilidade: document.getElementById('visibilidade').value,
+                    periodo: document.getElementById('periodo').value,
+                    correntes: document.getElementById('correntes').value,
+                    observacoes: document.getElementById('observacoesCenario').value,
+                    naviosSelecionados: Array.from(document.querySelectorAll('.ship-card.selected'))
+                        .map(card => ({
+                            id: card.dataset.id,
+                            nome: card.querySelector('h4').textContent,
+                            imagem: card.querySelector('.ship-image').src
+                        }))
+                };
+
+                if (!formData.tipoTreinamento || !formData.om || !formData.data || !formData.horario || 
+                    !formData.participantes || !formData.ramal || !formData.responsavel || 
+                    !formData.tipoCenario || !formData.dificuldade) {
+                    alert('Por favor, preencha todos os campos obrigatórios.');
+                    return;
+                }
+
+                console.log('Dados do agendamento:', formData);
+                alert('Agendamento salvo com sucesso!');
+            };
+
+            // Função para gerar e baixar o PDF
+            window.baixarFormulario = function() {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Adiciona o título
+                doc.setFontSize(18);
+                doc.text('Agendamento do Simulador de Submarinos', 20, 20);
+                
+                // Coleta os dados do formulário
+                const tipoTreinamento = document.getElementById('tipoTreinamento').value;
+                const om = document.getElementById('om').value;
+                const data = document.getElementById('data').value;
+                const horario = document.getElementById('horario').value;
+                const participantes = document.getElementById('participantes').value;
+                const ramal = document.getElementById('ramal').value;
+                const responsavel = document.getElementById('responsavel').value;
+                const tipoCenario = document.getElementById('tipoCenario').value;
+                const dificuldade = document.getElementById('dificuldade').value;
+                
+                // Adiciona os dados ao PDF
+                doc.setFontSize(12);
+                let y = 40;
+                doc.text(`Tipo de Treinamento: ${tipoTreinamento}`, 20, y); y += 10;
+                doc.text(`Organização Militar: ${om}`, 20, y); y += 10;
+                doc.text(`Data: ${data}`, 20, y); y += 10;
+                doc.text(`Horário: ${horario}`, 20, y); y += 10;
+                doc.text(`Número de Participantes: ${participantes}`, 20, y); y += 10;
+                doc.text(`Ramal para Contato: ${ramal}`, 20, y); y += 10;
+                doc.text(`Responsável: ${responsavel}`, 20, y); y += 10;
+                doc.text(`Tipo de Cenário: ${tipoCenario}`, 20, y); y += 10;
+                doc.text(`Nível de Dificuldade: ${dificuldade}`, 20, y); y += 10;
+                
+                // Adiciona as condições ambientais
+                doc.text('Condições Ambientais:', 20, y); y += 10;
+                doc.text(`Estado do Mar: ${document.getElementById('estadoMar').value}`, 30, y); y += 10;
+                doc.text(`Visibilidade: ${document.getElementById('visibilidade').value}`, 30, y); y += 10;
+                doc.text(`Período do Dia: ${document.getElementById('periodo').value}`, 30, y); y += 10;
+                doc.text(`Correntes Marinhas: ${document.getElementById('correntes').value}`, 30, y); y += 10;
+                
+                // Adiciona os navios selecionados
+                const naviosSelecionados = Array.from(document.querySelectorAll('.ship-card.selected'))
+                    .map(card => card.querySelector('h4').textContent);
+                doc.text('Navios Selecionados:', 20, y); y += 10;
+                naviosSelecionados.forEach(navio => {
+                    doc.text(`- ${navio}`, 30, y);
+                    y += 10;
+                });
+                
+                // Adiciona as observações
+                const observacoes = document.getElementById('observacoesCenario').value;
+                doc.text('Observações:', 20, y); y += 10;
+                doc.text(observacoes, 20, y, { maxWidth: 170 });
+                
+                // Salva o PDF
+                doc.save('Agendamento_Simulador_Submarinos.pdf');
+            };
+
+            // Adiciona event listeners
+            document.getElementById('tipoTreinamento').addEventListener('change', atualizarOpcoesCenario);
+            document.getElementById('tipoCenario').addEventListener('change', atualizarOpcoesNavios);
+
+            // Inicializa as funções
+            atualizarHorarios();
+            atualizarOpcoesCenario();
+            atualizarOpcoesNavios();
+        });
+    </script>
+</body>
+</html>
